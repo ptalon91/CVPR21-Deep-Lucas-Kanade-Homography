@@ -44,22 +44,21 @@ input_parameters = parser.parse_args()
 
 
 
-gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
-  # Restrict TensorFlow to only allocate 1GB of memory on the first GPU
-  try:
-    tf.config.experimental.set_virtual_device_configuration(
-        gpus[0],
-        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=5000)])
-    logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-  except RuntimeError as e:
-    # Virtual devices must be set before GPUs have been initialized
-    print(e)
+# gpus = tf.config.experimental.list_physical_devices('GPU')
+# if gpus:
+#   # Restrict TensorFlow to only allocate 1GB of memory on the first GPU
+#   try:
+#     tf.config.experimental.set_virtual_device_configuration(
+#         gpus[0],
+#         [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=5000)])
+#     logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+#     print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+#   except RuntimeError as e:
+#     # Virtual devices must be set before GPUs have been initialized
+#     print(e)
 
-
-
-
+cfg = tf.ConfigProto(gpu_options={'allow_growth': True})
+tf.set_session(tf.Session(config=cfg))
 
 if input_parameters.feature_map_type=='regular':
   save_path='./checkpoints/'+input_parameters.dataset_name+'/level_one_regular/'
@@ -298,6 +297,9 @@ for current_epoch in range(input_parameters.epoch_num):
         data_loader_caller=data_loader_MSCOCO('train')
 
     if input_parameters.dataset_name=='GoogleMap':
+        data_loader_caller=data_loader_GoogleMap('train')
+
+    if input_parameters.dataset_name=='SatVu':
         data_loader_caller=data_loader_GoogleMap('train')
 
     if input_parameters.dataset_name=='GoogleEarth':
