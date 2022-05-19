@@ -1,48 +1,26 @@
-
+import os
 import sys
 sys.path.append('../')
 
+import argparse
 from data_read import *
 from net import *
 import matplotlib.pyplot as plt
 import numpy as np
 
-import argparse
-
-import os
-
-
-
-
-
 parser = argparse.ArgumentParser()
 
-
-parser.add_argument('--dataset_name', action="store", dest= "dataset_name",default="GoogleMap",help='MSCOCO,GoogleMap,GoogleEarth,DayNight')
-
-
-
+parser.add_argument('--dataset_name', action="store", dest= "dataset_name",default="SatVu",help='MSCOCO,GoogleMap,GoogleEarth,DayNight')
 parser.add_argument('--learning_rate', action="store", dest="learning_rate", type=float, default=0.00001,help='learning_rate')
-
-parser.add_argument('--batch_size', action="store", dest="batch_size", type=int, default=4,help='batch_size')
-
+parser.add_argument('--batch_size', action="store", dest="batch_size", type=int, default=1,help='batch_size')
 parser.add_argument('--feature_map_type', action="store", dest="feature_map_type", default='special',help='regular or special')
-
-parser.add_argument('--save_eval_f', action="store", dest="save_eval_f", type=int, default=400000,help='save and eval after how many iterations')
-
+parser.add_argument('--save_eval_f', action="store", dest="save_eval_f", type=int, default=1000,help='save and eval after how many iterations')
 parser.add_argument('--epoch_start', action="store", dest="epoch_start", type=int, default=1,help='train from which epoch')
-
 parser.add_argument('--sample_noise', action="store", dest="sample_noise", type=int, default=4,help='samples noise number, 4 for google, 2 for MSCOCO')
-
 parser.add_argument('--lambda_loss', action="store", dest="lambda_loss", type=int, default=0.2,help='0.2 for Google, 0.1 for MSCOCO')
-
-
 parser.add_argument('--epoch_num', action="store", dest="epoch_num", type=int, default=10,help='how many epochs to train')
 
-
 input_parameters = parser.parse_args()
-
-
 
 # gpus = tf.config.experimental.list_physical_devices('GPU')
 # if gpus:
@@ -57,15 +35,11 @@ input_parameters = parser.parse_args()
 #     # Virtual devices must be set before GPUs have been initialized
 #     print(e)
 
-cfg = tf.ConfigProto(gpu_options={'allow_growth': True})
-tf.set_session(tf.Session(config=cfg))
-
 if input_parameters.feature_map_type=='regular':
   save_path='./checkpoints/'+input_parameters.dataset_name+'/level_one_regular/'
 
 elif input_parameters.feature_map_type=='special':
   save_path='./checkpoints/'+input_parameters.dataset_name+'/level_one/'
-
 
 if not(os.path.exists('./checkpoints')):
     os.mkdir('./checkpoints')
@@ -74,13 +48,9 @@ if not(os.path.exists('./checkpoints/'+input_parameters.dataset_name)):
 if not(os.path.exists(save_path)):
     os.mkdir(save_path)
 
-
 lr=input_parameters.learning_rate
 
-
-
-
-
+print("Batch size: ", input_parameters.batch_size)
 
 def initial_motion_COCO():
     # prepare source and target four points
@@ -271,9 +241,6 @@ elif input_parameters.feature_map_type=='special':
     level_one_input=ResNet_first_input()
     level_one_template=ResNet_first_template()
 
-
-
-
 if input_parameters.epoch_start>1:
     #load weights
     level_one_input.load_weights(save_path + 'epoch_'+str(input_parameters.epoch_start-1)+"input_full")
@@ -286,10 +253,6 @@ initial_matrix=initial_motion_COCO()
 LK_layer_one=Lucas_Kanade_layer(batch_size=input_parameters.batch_size,height_template=128,width_template=128,num_channels=1)
 
 
-
-
-
-
 for current_epoch in range(input_parameters.epoch_num):
 
 
@@ -300,7 +263,7 @@ for current_epoch in range(input_parameters.epoch_num):
         data_loader_caller=data_loader_GoogleMap('train')
 
     if input_parameters.dataset_name=='SatVu':
-        data_loader_caller=data_loader_GoogleMap('train')
+        data_loader_caller=data_loader_SatVu('train')
 
     if input_parameters.dataset_name=='GoogleEarth':
         data_loader_caller=data_loader_GoogleEarth('train')
@@ -319,8 +282,8 @@ for current_epoch in range(input_parameters.epoch_num):
     ssim_loss_total=0.0
 
     for iters in range(10000000):
+
         input_img,u_list,v_list,template_img=data_loader_caller.data_read_batch(batch_size=input_parameters.batch_size)
-        
 
         if len(np.shape(input_img))<2:
           level_one_input.save_weights(save_path +'epoch_'+str(input_parameters.epoch_start+current_epoch)+"input_full")
@@ -345,8 +308,6 @@ for current_epoch in range(input_parameters.epoch_num):
             ssim_middle_one=tf.reduce_mean(compute_ssim(template_feature_map_one,input_warped_to_template))
             ssim_middle=ssim_middle_one
 
-            
-
             #print ('!!!!!!!!!')
 
             for nn in range(input_parameters.sample_noise):
@@ -367,8 +328,6 @@ for current_epoch in range(input_parameters.epoch_num):
                 ssim_shift_one_left=tf.reduce_mean(compute_ssim(template_feature_map_one,input_warped_to_template_shift_one_left))
                 ssim_convex_one_left= -tf.math.minimum((ssim_shift_one_left-ssim_middle_one)-np.sum(lambda_one**2),0)
 
-
-
                 '''
                 input_warped_to_template_shift_one_left_left=LK_layer_one.projective_inverse_warp(input_feature_map_one, gt_matrix_one+1.5*gt_matrix_noisy_one)
                 ssim_shift_one_left_left=tf.reduce_mean(compute_ssim(template_feature_map_one,input_warped_to_template_shift_one_left_left))
@@ -385,9 +344,6 @@ for current_epoch in range(input_parameters.epoch_num):
 
                  
                 ssim_convex_one_left_further= -tf.math.minimum((ssim_shift_one_left_left-ssim_shift_one_left)-(np.sum((2*lambda_one)**2)-np.sum(lambda_one**2)),0)
-
-
-
 
                 input_warped_to_template_shift_one_right=LK_layer_one.projective_inverse_warp(input_feature_map_one, gt_matrix_one-gt_matrix_noisy_one)
                 ssim_shift_one_right=tf.reduce_mean(compute_ssim(template_feature_map_one,input_warped_to_template_shift_one_right))
@@ -409,11 +365,6 @@ for current_epoch in range(input_parameters.epoch_num):
                
                 ssim_convex_one_right_further= -tf.math.minimum((ssim_shift_one_right_right-ssim_shift_one_right)-(np.sum((2*lambda_one)**2)-np.sum(lambda_one**2)),0)
 
-
-
-
-
-         
                 if nn==0:
                     convex_loss=ssim_convex_one_left+ssim_convex_one_right+ssim_convex_one_left_further+ssim_convex_one_right_further
                 else:
@@ -430,17 +381,12 @@ for current_epoch in range(input_parameters.epoch_num):
             error_ave_1000+=total_loss
             #print ('!!!!!!!!!!!!!!!!!')
 
-
-
         all_parameters=level_one_template.trainable_variables+level_one_input.trainable_variables
            
         grads = tape.gradient(total_loss, all_parameters)
         grads=[tf.clip_by_value(i,-0.1,0.1) for i in grads]
         optimizer.apply_gradients(zip(grads, all_parameters))
 
-      
-
- 
         if iters%100==0 and iters>0:
             
             

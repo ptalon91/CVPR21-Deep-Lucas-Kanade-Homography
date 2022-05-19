@@ -47,18 +47,18 @@ input_parameters = parser.parse_args()
 
 
 
-gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
-  # Restrict TensorFlow to only allocate 1GB of memory on the first GPU
-  try:
-    tf.config.experimental.set_virtual_device_configuration(
-        gpus[0],
-        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=4500)])
-    logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-  except RuntimeError as e:
-    # Virtual devices must be set before GPUs have been initialized
-    print(e)
+# gpus = tf.config.experimental.list_physical_devices('GPU')
+# if gpus:
+#   # Restrict TensorFlow to only allocate 1GB of memory on the first GPU
+#   try:
+#     tf.config.experimental.set_virtual_device_configuration(
+#         gpus[0],
+#         [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=4500)])
+#     logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+#     print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+#   except RuntimeError as e:
+#     # Virtual devices must be set before GPUs have been initialized
+#     print(e)
 
 
 if input_parameters.feature_map_type=='regular':
@@ -102,17 +102,11 @@ level_one_input.load_weights(load_path + 'epoch_'+str(input_parameters.epoch_loa
 
 level_one_template.load_weights(load_path + 'epoch_'+str(input_parameters.epoch_load)+"template_full")
 
-
-
-
 if input_parameters.epoch_start>1:
     #load weights
     level_two_input.load_weights(save_path + 'epoch_'+str(input_parameters.epoch_start-1)+"input_full")
 
     level_two_template.load_weights(save_path + 'epoch_'+str(input_parameters.epoch_start-1)+"template_full")
-
-
-
 
 def initial_motion_COCO():
     # prepare source and target four points
@@ -177,7 +171,6 @@ def average_cornner_error(batch_size,predicted_matrix,u_list,v_list,top_left_u=0
     
     return average_conner
     
-
 
 '''
 def compute_ssim(img_1,img_2):
@@ -296,11 +289,6 @@ initial_matrix=initial_motion_COCO()
     
 LK_layer_two=Lucas_Kanade_layer(batch_size=input_parameters.batch_size,height_template=64,width_template=64,num_channels=1)
 
-
-
-
-
-
 #initial_matrix_scaled=construct_matrix(initial_matrix,scale_factor=0.125,batch_size=input_parameters.batch_size)
 
 
@@ -315,6 +303,9 @@ for current_epoch in range(input_parameters.epoch_num):
 
     if input_parameters.dataset_name=='GoogleEarth':
         data_loader_caller=data_loader_GoogleEarth('train')
+
+    if input_parameters.dataset_name=='SatVu':
+        data_loader_caller=data_loader_SatVu('train')
 
     if input_parameters.dataset_name=='DayNight':
         data_loader_caller=data_loader_DayNight('train')
@@ -345,7 +336,6 @@ for current_epoch in range(input_parameters.epoch_num):
 
         with tf.GradientTape() as tape:
 
-
             input_feature=level_two_input.call(input_feature_one)
             template_feature=level_two_template.call(template_feature_one)
 
@@ -364,8 +354,6 @@ for current_epoch in range(input_parameters.epoch_num):
 
             ssim_middle=ssim_middle_two
 
-            
-
             #print ('!!!!!!!!!')
 
             for nn in range(input_parameters.sample_noise):
@@ -375,18 +363,9 @@ for current_epoch in range(input_parameters.epoch_num):
                     lambda_two[mm]=0.02
                   if lambda_two[mm]<0 and lambda_two[mm]>-0.02:
                     lambda_two[mm]=-0.02
-              
-                
-
-
             
                 gt_matrix_noisy_two=gt_motion_rs_random_noisy(u_list,v_list,batch_size=input_parameters.batch_size,lambda_noisy=lambda_two)
                 gt_matrix_noisy_two=construct_matrix(gt_matrix_noisy_two,scale_factor=0.5,batch_size=input_parameters.batch_size)
-
-
-                
-
-
 
                 input_warped_to_template_shift_two_left=LK_layer_two.projective_inverse_warp(input_feature_map_two, gt_matrix_two+gt_matrix_noisy_two)
                 ssim_shift_two_left=tf.reduce_mean(compute_ssim(template_feature_map_two,input_warped_to_template_shift_two_left))
@@ -412,8 +391,6 @@ for current_epoch in range(input_parameters.epoch_num):
                  
                   ssim_convex_two_left_further= -tf.math.minimum((ssim_shift_two_left_left-ssim_shift_two_left)-(np.sum((2*lambda_two)**2)-np.sum(lambda_two**2)),0)
 
-
-
                 input_warped_to_template_shift_two_right=LK_layer_two.projective_inverse_warp(input_feature_map_two, gt_matrix_two-gt_matrix_noisy_two)
                 ssim_shift_two_right=tf.reduce_mean(compute_ssim(template_feature_map_two,input_warped_to_template_shift_two_right))
                 ssim_convex_two_right= -tf.math.minimum((ssim_shift_two_right-ssim_middle_two)-np.sum(lambda_two**2),0)
@@ -437,10 +414,6 @@ for current_epoch in range(input_parameters.epoch_num):
                  
                   ssim_convex_two_right_further= -tf.math.minimum((ssim_shift_two_right_right-ssim_shift_two_right)-(np.sum((2*lambda_two)**2)-np.sum(lambda_two**2)),0)
 
-
-
-                
-
                 if nn==0:
                     convex_loss=ssim_convex_two_left+ssim_convex_two_right+ssim_convex_two_left_further+ssim_convex_two_right_further
                 else:
@@ -455,19 +428,13 @@ for current_epoch in range(input_parameters.epoch_num):
             error_ave_1000+=total_loss
             #print ('!!!!!!!!!!!!!!!!!')
 
-
-
         all_parameters=level_two_template.trainable_variables+level_two_input.trainable_variables
            
         grads = tape.gradient(total_loss, all_parameters)
         grads=[tf.clip_by_value(i,-0.1,0.1) for i in grads]
         optimizer.apply_gradients(zip(grads, all_parameters))
-
-      
-
  
         if iters%100==0 and iters>0:
-            
             
             print(iters)
             print (save_path)
@@ -484,8 +451,6 @@ for current_epoch in range(input_parameters.epoch_num):
             level_two_input.save_weights(save_path +'epoch_'+str(input_parameters.epoch_start+current_epoch)+"input_"+str(iters))
             level_two_template.save_weights(save_path +'epoch_'+str(input_parameters.epoch_start+current_epoch)+"template_"+str(iters))
 
-
-           
         input_img = None
         u_list = None
         v_list = None
